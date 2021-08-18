@@ -10,6 +10,7 @@ wgpu = { version="0.9" }
 env_logger = "0.9.0"
 pollster = "0.2.4"
 winit = "0.25.0"
+bytemuck = { version = "1.7.2", features = [ "derive" ] }
 
 [[example]]
 name = "window"
@@ -22,3 +23,7 @@ path = "example/swap_chain.rs"
 [[example]]
 name = "pipeline"
 path = "example/pipeline/pipeline.rs"
+
+[[example]]
+name = "buffer"
+path = "example/buffer/main.rs"
