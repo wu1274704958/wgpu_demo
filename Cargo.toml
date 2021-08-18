@@ -18,3 +18,7 @@ path = "example/window.rs"
 [[example]]
 name = "swap_chain"
 path = "example/swap_chain.rs"
+
+[[example]]
+name = "pipeline"
+path = "example/pipeline/pipeline.rs"
