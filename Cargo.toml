@@ -12,27 +12,32 @@ pollster = "0.2.4"
 winit = "0.25.0"
 bytemuck = { version = "1.7.2", features = [ "derive" ] }
 image = "0.23.14"
+cgmath = "0.18.0"
 
 [[example]]
 name = "window"
-path = "example/window.rs"
+path = "src/example/window.rs"
 
 [[example]]
 name = "swap_chain"
-path = "example/swap_chain.rs"
+path = "src/example/swap_chain.rs"
 
 [[example]]
 name = "pipeline"
-path = "example/pipeline/pipeline.rs"
+path = "src/example/pipeline/pipeline.rs"
 
 [[example]]
 name = "buffer"
-path = "example/buffer/main.rs"
+path = "src/example/buffer/main.rs"
 
 [[example]]
 name = "textures"
-path = "example/textures/main.rs"
+path = "src/example/textures/main.rs"
 
 [[example]]
 name = "load_jpeg"
-path = "example/load_jpeg/main.rs"
+path = "src/example/load_jpeg/main.rs"
+
+[[example]]
+name = "uniform"
+path = "src/example/uniform/main.rs"
