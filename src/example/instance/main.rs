@@ -65,6 +65,7 @@ struct State{
     instances: Vec<Instance>,
     instance_buf: Vec<Matrix4<f32>>,
     rotate : Vector3<f32>,
+    instance_buffer: Buffer
 }
 
 impl State{
@@ -150,7 +151,7 @@ impl State{
                 BindGroupEntry{ binding: 1, resource: BindingResource::Sampler(&sampler) }
             ]
         });
-        let uniform = Uniform::new(45.0,size.width as f32 / size.height as f32 );
+        let uniform = Uniform::new(60.0,size.width as f32 / size.height as f32 );
 
         let uniform_buf = device.create_buffer_init(&BufferInitDescriptor{
             label: Some("Uniform Buffer"),
@@ -158,10 +159,16 @@ impl State{
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
         });
 
-        let instances = Instance::gen_instances(25,5,Vector3::new(0.0,0.1,0.0),1.0);
+        let instances = Instance::gen_instances(25,5,Vector3::new(0.0,0.03,0.0),1.0);
         let instance_buf:Vec<_> = instances.iter().map(|it|{
             it.to_matrix()
         }).collect();
+
+        let instance_buffer = device.create_buffer_init(&BufferInitDescriptor{
+            label: Some("Instance Buffer"),
+            contents: unsafe { from_raw_parts_ex(instance_buf.as_slice()) },
+            usage: BufferUsage::VERTEX
+        });
 
         let vertex_binding_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor{
             label: Some("Vertex Binding Group"),
@@ -211,7 +218,8 @@ impl State{
             uniform_buf,
             rotate: Vector3::zero(),
             instances,
-            instance_buf
+            instance_buf,
+            instance_buffer
         }
     }
 
@@ -235,7 +243,13 @@ impl State{
                     array_stride: size_of::<Vertex>() as _,
                     step_mode: InputStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![ 0 => Float32x3, 1=> Float32x4, 2=> Float32x2 ]
-                } ]
+                },
+                    VertexBufferLayout{
+                        array_stride: size_of::<Matrix4<f32>>() as _,
+                        step_mode: InputStepMode::Instance,
+                        attributes: &wgpu::vertex_attr_array![ 5 => Float32x4,6 => Float32x4,7 => Float32x4,8 => Float32x4 ]
+                    }
+                ]
             },
             fragment: Some(FragmentState{
                 module: &shader,
@@ -289,8 +303,8 @@ impl State{
 
     fn update(&mut self) {
         self.rotate.y += 0.1;
-        self.uniform.set_model(cgmath::Matrix4::from_angle_y(Rad(self.rotate.y.sin())));
-        unsafe { self.queue.write_buffer(&self.uniform_buf, 0, from_raw_parts(&self.uniform)) }
+        //self.uniform.set_model(cgmath::Matrix4::from_angle_y(Rad(self.rotate.y.sin())));
+        //unsafe { self.queue.write_buffer(&self.uniform_buf, 0, from_raw_parts(&self.uniform)) }
     }
     fn render(&mut self) -> Result<(),wgpu::SwapChainError>
     {
@@ -318,9 +332,10 @@ impl State{
             render_pass.set_bind_group(0,&self.bind_groups[0],&[]);
             render_pass.set_bind_group(1,&self.bind_groups[1],&[]);
             render_pass.set_vertex_buffer(0,self.vertices.slice(..));
+            render_pass.set_vertex_buffer(1,self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.indices.slice(..),IndexFormat::Uint32);
             //render_pass.draw(0..VERTICES.len() as u32,0..1);
-            render_pass.draw_indexed(0..INDICES.len() as u32,0,0..1);
+            render_pass.draw_indexed(0..INDICES.len() as u32,0,0..self.instance_buf.len() as _);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         Ok(())
@@ -440,7 +455,7 @@ impl Uniform{
         let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,1000f32);
         Uniform{
             projection : proj,
-            view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-2f32)),
+            view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-6f32)),
         }
     }
 }
@@ -457,18 +472,19 @@ impl Instance {
         let mut col = len / row;
         if len % row > 0 { col += 1 };
         let mut pos = Vector3::new(
-            (row as f32 * space) / 2f32,
-            (col as f32 * space) / 2f32,
+            ((row - 1) as f32 * space) / 2f32,
+            ((col - 1) as f32 * space) / 2f32,
                 0f32
         );
-        let mut rot = Vector3::zero();
+        let mut rot = Vector3::<f32>::zero();
         for i in 0..len {
             res.push(Instance{
-                pos,quaternion: Quaternion::from_angle_x(rot.x) * Quaternion::from_angle_x(rot.y) * Quaternion::from_angle_x(rot.z)
+                pos,quaternion: Quaternion::from_angle_x(Rad(rot.x)) *
+                    Quaternion::from_angle_y(Rad(rot.y)) * Quaternion::from_angle_z(Rad(rot.z))
             });
             if (i + 1) % row == 0
             {
-                pos.x = (row as f32 * space) / 2f32;
+                pos.x = ((row - 1) as f32 * space) / 2f32;
                 pos.y -= space;
             }else{
                 pos.x -= space;

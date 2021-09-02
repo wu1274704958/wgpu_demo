@@ -14,16 +14,30 @@ struct VertexInput {
 struct Uniforms {
     projection: mat4x4<f32>;
     view: mat4x4<f32>;
-    model: mat4x4<f32>;
+    //model: mat4x4<f32>;
 };
+
+struct InstanceInput {
+    [[location(5)]] model_matrix_0: vec4<f32>;
+    [[location(6)]] model_matrix_1: vec4<f32>;
+    [[location(7)]] model_matrix_2: vec4<f32>;
+    [[location(8)]] model_matrix_3: vec4<f32>;
+};
+
 [[group(1), binding(0)]] // 2.
 var<uniform> uniforms: Uniforms;
 
 [[stage(vertex)]]
-fn main(in : VertexInput) -> VertexOutput
+fn main(in : VertexInput,instance: InstanceInput) -> VertexOutput
 {
+    let model_matrix = mat4x4<f32>(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
     var out: VertexOutput;
-    out.clip_position = uniforms.projection * uniforms.view * uniforms.model * vec4<f32>(in.position,1.0);
+    out.clip_position = uniforms.projection * uniforms.view * model_matrix * vec4<f32>(in.position,1.0);
     out.color = in.color;
     out.uv = in.uv;
     return out;
