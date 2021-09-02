@@ -41,3 +41,7 @@ path = "src/example/load_jpeg/main.rs"
 [[example]]
 name = "uniform"
 path = "src/example/uniform/main.rs"
+
+[[example]]
+name = "instance"
+path = "src/example/instance/main.rs"
