@@ -9,8 +9,8 @@ use wgpu::util::{DeviceExt, BufferInitDescriptor};
 use std::mem::size_of;
 use image::{ImageError, GenericImageView};
 use std::num::NonZeroU32;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Zero, Rad, Quaternion, Rotation3};
-use winit::dpi::Pixel;
+use cgmath::{Matrix4, SquareMatrix, Vector3, Zero, Rad, Quaternion, Rotation3, Vector2};
+use winit::dpi::{Pixel, PhysicalPosition};
 use std::ops::Range;
 
 #[repr(C)]
@@ -65,7 +65,9 @@ struct State{
     instances: Vec<Instance>,
     instance_buf: Vec<Matrix4<f32>>,
     rotate : Vector3<f32>,
-    instance_buffer: Buffer
+    instance_buffer: Buffer,
+    left_btn_down: bool,
+    last_cursor_pos : Vector2<f32>
 }
 
 impl State{
@@ -159,7 +161,7 @@ impl State{
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
         });
 
-        let instances = Instance::gen_instances(25,5,Vector3::new(0.0,0.03,0.0),1.0);
+        let instances = Instance::gen_instances(81,9,Vector3::new(0.0,0.003,0.0),1.0);
         let instance_buf:Vec<_> = instances.iter().map(|it|{
             it.to_matrix()
         }).collect();
@@ -219,7 +221,9 @@ impl State{
             rotate: Vector3::zero(),
             instances,
             instance_buf,
-            instance_buffer
+            instance_buffer,
+            left_btn_down :false,
+            last_cursor_pos: Vector2::zero()
         }
     }
 
@@ -289,7 +293,7 @@ impl State{
         }
     }
 
-    fn input(&mut self,event:&WindowEvent) -> bool
+    fn input(&mut self,event:&WindowEvent,window:&Window) -> bool
     {
         match event{
             &WindowEvent::KeyboardInput{ input:KeyboardInput{
@@ -297,14 +301,36 @@ impl State{
             },.. } => {
                 true
             }
+            &WindowEvent::MouseInput {
+                button:MouseButton::Left,
+                state,..
+            } => {
+
+                self.left_btn_down = match state{
+                    ElementState::Pressed => {true}
+                    ElementState::Released => {false}
+                };
+                true
+            }
+            &WindowEvent::CursorMoved{position:PhysicalPosition::<f64> {x,y},..} =>
+            {
+                if self.left_btn_down{
+                    let offset = Vector2::new(x as f32,y as f32) - self.last_cursor_pos;
+                    self.rotate.y += offset.x * 0.001;
+                    self.rotate.x += offset.y * 0.001;
+                    self.last_cursor_pos = Vector2::new(x as f32,y as f32);
+                }else{
+                    self.last_cursor_pos = Vector2::new(x as f32,y as f32);
+                }
+                true
+            }
             _ => { false }
         }
     }
 
     fn update(&mut self) {
-        self.rotate.y += 0.1;
-        //self.uniform.set_model(cgmath::Matrix4::from_angle_y(Rad(self.rotate.y.sin())));
-        //unsafe { self.queue.write_buffer(&self.uniform_buf, 0, from_raw_parts(&self.uniform)) }
+        self.uniform.set_rotate(self.rotate);
+        unsafe { self.queue.write_buffer(&self.uniform_buf, 0, from_raw_parts(&self.uniform)) }
     }
     fn render(&mut self) -> Result<(),wgpu::SwapChainError>
     {
@@ -396,6 +422,7 @@ impl State{
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
+
     let window = WindowBuilder::new()
         .with_title("swap chain")
         .build(&event_loop).unwrap();
@@ -406,7 +433,7 @@ fn main() {
         match e {
             Event::WindowEvent { window_id,event} => {
                 if window_id == window.id() {
-                    if !state.input(&event) {
+                    if !state.input(&event,&window) {
                         match event {
                             WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
                                 input: KeyboardInput {
@@ -455,8 +482,18 @@ impl Uniform{
         let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,1000f32);
         Uniform{
             projection : proj,
-            view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-6f32)),
+            view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-9f32)),
         }
+    }
+
+    fn set_rotate(&mut self,r:Vector3<f32>)
+    {
+        let mat =
+            cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-9f32)) *
+            Matrix4::from_angle_x(Rad(r.x)) *
+            Matrix4::from_angle_y(Rad(r.y)) *
+            Matrix4::from_angle_z(Rad(r.z));
+        self.view = mat;
     }
 }
 
