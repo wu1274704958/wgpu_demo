@@ -4,7 +4,7 @@ use winit::{
     window::WindowBuilder,
 };
 use winit::window::Window;
-use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer, Device, CompareFunction};
+use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer, Device, CompareFunction, DepthStencilState, RenderPassDepthStencilAttachment, Operations, LoadOp};
 use wgpu::util::{DeviceExt, BufferInitDescriptor};
 use std::mem::size_of;
 use image::{ImageError, GenericImageView};
@@ -12,6 +12,7 @@ use std::num::NonZeroU32;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Zero, Rad, Quaternion, Rotation3, Vector2};
 use winit::dpi::{Pixel, PhysicalPosition};
 use std::ops::Range;
+use wgpu::LoadOp::Clear;
 
 #[repr(C)]
 #[derive(Debug,Copy, Clone,bytemuck::Pod, bytemuck::Zeroable)]
@@ -67,7 +68,8 @@ struct State{
     rotate : Vector3<f32>,
     instance_buffer: Buffer,
     left_btn_down: bool,
-    last_cursor_pos : Vector2<f32>
+    last_cursor_pos : Vector2<f32>,
+    depth_stencil : (Texture,TextureView,Sampler)
 }
 
 impl State{
@@ -201,7 +203,7 @@ impl State{
 
         let pipeline = Self::create_pipeline(&device,&shader,&sc_desc,&[&bind_group_layout,
             &vertex_binding_group_layout]);
-
+        let depth_stencil = Self::create_depth_stencil(&device,&sc_desc);
         State{
             surface,
             device,
@@ -223,7 +225,8 @@ impl State{
             instance_buf,
             instance_buffer,
             left_btn_down :false,
-            last_cursor_pos: Vector2::zero()
+            last_cursor_pos: Vector2::zero(),
+            depth_stencil
         }
     }
 
@@ -257,6 +260,7 @@ impl State{
             anisotropy_clamp: None,
             border_color: None
         });
+        (tex,tex_view,sampler)
     }
 
     fn create_pipeline(device:& wgpu::Device,shader:&ShaderModule,
@@ -305,7 +309,13 @@ impl State{
                 polygon_mode: PolygonMode::Fill,
                 conservative: false
             },
-            depth_stencil: None,
+            depth_stencil: Some(DepthStencilState{
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: Default::default(),
+                bias: Default::default()
+            }),
             multisample: MultisampleState{
                 count: 1,
                 mask: u64::MAX,
@@ -384,7 +394,11 @@ impl State{
                         }
                     }
                 ],
-                depth_stencil_attachment: None
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment{
+                    view: &self.depth_stencil.1,
+                    depth_ops: Some(Operations::<f32>{ load: LoadOp::Clear(1f32), store: true }),
+                    stencil_ops: None
+                })
             });
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0,&self.bind_groups[0],&[]);
