@@ -4,7 +4,7 @@ use winit::{
     window::WindowBuilder,
 };
 use winit::window::Window;
-use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer};
+use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer, Device, CompareFunction};
 use wgpu::util::{DeviceExt, BufferInitDescriptor};
 use std::mem::size_of;
 use image::{ImageError, GenericImageView};
@@ -161,7 +161,7 @@ impl State{
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
         });
 
-        let instances = Instance::gen_instances(81,9,Vector3::new(0.0,0.003,0.0),1.0);
+        let instances = Instance::gen_instances(81,9,Vector3::new(0.0,0.03,0.0),1.0);
         let instance_buf:Vec<_> = instances.iter().map(|it|{
             it.to_matrix()
         }).collect();
@@ -227,6 +227,38 @@ impl State{
         }
     }
 
+    fn create_depth_stencil(device:&Device,sc_desc:&SwapChainDescriptor)-> (Texture,TextureView,Sampler)
+    {
+        let tex = device.create_texture(&TextureDescriptor{
+            label: Some("Depth Stencil Tex"),
+            size: Extent3d{
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth_or_array_layers: 1
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::SAMPLED
+        });
+        let tex_view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor{
+            label: Some("Depth Stencil Sampler"),
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Nearest,
+            lod_min_clamp: -100 as _,
+            lod_max_clamp: 100 as _,
+            compare: Some(CompareFunction::LessEqual),
+            anisotropy_clamp: None,
+            border_color: None
+        });
+    }
+
     fn create_pipeline(device:& wgpu::Device,shader:&ShaderModule,
                        sc_desc:&SwapChainDescriptor,
                        bind_group_layouts:&'_[&'_ BindGroupLayout]) -> wgpu::RenderPipeline
@@ -268,7 +300,7 @@ impl State{
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
+                cull_mode: None,
                 clamp_depth: false,
                 polygon_mode: PolygonMode::Fill,
                 conservative: false
