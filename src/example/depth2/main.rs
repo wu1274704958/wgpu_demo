@@ -104,7 +104,7 @@ struct State{
     mesh_quad: (Buffer,Buffer),
     depth_pipeline:RenderPipeline,
     depth_uniform:(Uniform2,Buffer),
-    depth_bind_group_layout:BindGroupLayout,
+    depth_bind_group_layout: BindGroupLayout,
 }
 
 impl State{
@@ -230,7 +230,7 @@ impl State{
                     visibility: ShaderStage::FRAGMENT,
                     ty: BindingType::Sampler{
                         filtering: true,
-                        comparison: true
+                        comparison: false
                     },
                     count: None
                 }
@@ -261,7 +261,7 @@ impl State{
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
         });
 
-        let instances = Instance::gen_instances(81,9,Vector3::new(0.0,0.03,0.0),1.0);
+        let instances = Instance::gen_instances(255,15,Vector3::new(0.0,0.03,0.0),1.0);
         let instance_buf:Vec<_> = instances.iter().map(|it|{
             it.to_matrix()
 
@@ -377,7 +377,7 @@ impl State{
             mipmap_filter: FilterMode::Nearest,
             lod_min_clamp: -100 as _,
             lod_max_clamp: 100 as _,
-            compare: Some(CompareFunction::LessEqual),
+            compare: None,
             anisotropy_clamp: None,
             border_color: None
         });
@@ -689,7 +689,7 @@ fn main() {
 impl Uniform{
     fn new(fovy:f32,aspect:f32) -> Uniform
     {
-        let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,1000f32);
+        let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,100f32);
         Uniform{
             projection : proj,
             view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-9f32)),
@@ -709,7 +709,7 @@ impl Uniform{
 impl Uniform2{
     fn new(fovy:f32,aspect:f32) -> Uniform2
     {
-        let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,1000f32);
+        let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,100f32);
         Uniform2{
             projection : proj,
             view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-2f32)),

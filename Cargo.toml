@@ -49,3 +49,7 @@ path = "src/example/instance/main.rs"
 [[example]]
 name = "depth"
 path = "src/example/depth/main.rs"
+
+[[example]]
+name = "depth2"
+path = "src/example/depth2/main.rs"
