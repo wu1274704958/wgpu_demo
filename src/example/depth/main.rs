@@ -4,7 +4,7 @@ use winit::{
     window::WindowBuilder,
 };
 use winit::window::Window;
-use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer, Device, CompareFunction, DepthStencilState, RenderPassDepthStencilAttachment, Operations, LoadOp};
+use wgpu::{BackendBit, RequestAdapterOptions, PowerPreference, DeviceDescriptor, Features, TextureUsage, TextureFormat, PresentMode, CommandBufferDescriptor, CommandEncoderDescriptor, RenderPassDescriptor, ShaderModuleDescriptor, ShaderFlags, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexState, FragmentState, ColorTargetState, BlendState, BlendComponent, PrimitiveState, PrimitiveTopology, FrontFace, Face, PolygonMode, MultisampleState, ShaderModule, SwapChainDescriptor, BufferUsage, VertexBufferLayout, InputStepMode, IndexFormat, TextureView, Texture, Sampler, TextureDescriptor, Extent3d, TextureDimension, ImageDataLayout, ImageCopyTexture, Origin3d, TextureViewDescriptor, TextureViewDimension, TextureAspect, SamplerDescriptor, AddressMode, FilterMode, BindGroupLayoutDescriptor, BindGroupLayoutEntry, ShaderStage, BindingType, TextureSampleType, BindGroupDescriptor, BindGroupEntry, BindingResource, BindGroupLayout, BindGroup, BufferDescriptor, BufferBindingType, Buffer, Device, CompareFunction, DepthStencilState, RenderPassDepthStencilAttachment, Operations, LoadOp, RenderPipeline};
 use wgpu::util::{DeviceExt, BufferInitDescriptor};
 use std::mem::size_of;
 use image::{ImageError, GenericImageView};
@@ -36,11 +36,43 @@ const INDICES: &[u32] = &[
     2, 3, 4,
 ];
 
+const DEPTH_VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-0.9, -0.9, 0.0],
+        tex_coords: [0.0, 1.0],
+        color : [1.0,1.0,1.0,1.0]
+    },
+    Vertex {
+        position: [0.9, -0.9, 0.0],
+        tex_coords: [1.0, 1.0],
+        color : [1.0,1.0,1.0,1.0]
+    },
+    Vertex {
+        position: [0.9, 0.9, 0.0],
+        tex_coords: [1.0, 0.0],
+        color : [1.0,1.0,1.0,1.0]
+    },
+    Vertex {
+        position: [-0.9, 0.9, 0.0],
+        tex_coords: [0.0, 0.0],
+        color : [1.0,1.0,1.0,1.0]
+    },
+];
+
+const DEPTH_INDICES: &[u32] = &[0, 1, 2, 0, 2, 3];
+
 #[repr(C)]
 #[derive(Debug,Copy, Clone)]
 struct Uniform {
     projection: Matrix4<f32>,
     view: Matrix4<f32>,
+}
+#[repr(C)]
+#[derive(Debug,Copy, Clone)]
+struct Uniform2 {
+    projection: Matrix4<f32>,
+    view: Matrix4<f32>,
+    model: Matrix4<f32>,
 }
 struct Instance{
     pos: Vector3<f32>,
@@ -59,7 +91,6 @@ struct State{
     vertices : wgpu::Buffer,
     indices : wgpu::Buffer,
     img1: (Texture,TextureView,Sampler),
-    bind_group_layouts: Vec<BindGroupLayout>,
     bind_groups : Vec<BindGroup>,
     uniform : Uniform,
     uniform_buf : Buffer,
@@ -69,7 +100,10 @@ struct State{
     instance_buffer: Buffer,
     left_btn_down: bool,
     last_cursor_pos : Vector2<f32>,
-    depth_stencil : (Texture,TextureView,Sampler)
+    depth_stencil : (Texture,TextureView,Sampler),
+    mesh_quad: (Buffer,Buffer),
+    depth_pipeline:RenderPipeline,
+    depth_uniform:(Uniform2,Buffer),
 }
 
 impl State{
@@ -107,6 +141,11 @@ impl State{
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             flags: ShaderFlags::all()
         });
+        let shader_depth = device.create_shader_module(&ShaderModuleDescriptor{
+            label: Some("Shader Depth"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader_depth.wgsl").into()),
+            flags: ShaderFlags::all()
+        });
 
         let vertices = device.create_buffer_init(&BufferInitDescriptor{
             label: Some("Vertices"),
@@ -119,6 +158,20 @@ impl State{
             contents: bytemuck::cast_slice(INDICES),
             usage: BufferUsage::INDEX
         });
+        
+        let depth_vertices = device.create_buffer_init(&BufferInitDescriptor{
+            label: Some("Depth Vertices"),
+            contents: bytemuck::cast_slice(DEPTH_VERTICES),
+            usage: BufferUsage::VERTEX
+        });
+
+        let depth_indices = device.create_buffer_init(&BufferInitDescriptor{
+            label: Some("Depth Indices"),
+            contents: bytemuck::cast_slice(DEPTH_INDICES),
+            usage: BufferUsage::INDEX
+        });
+        
+        
         let img_data = include_bytes!("../textures/happy-tree.png");
         let (texture,texture_view,sampler) = Self::load_texture(&device,&queue,img_data).unwrap();
 
@@ -148,14 +201,52 @@ impl State{
         });
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor{
-            label: Some("Bind Group"),
+            label: Some("Depth Bind Group"),
             layout: &bind_group_layout,
             entries: &[
                 BindGroupEntry{ binding: 0, resource: BindingResource::TextureView(&texture_view) },
                 BindGroupEntry{ binding: 1, resource: BindingResource::Sampler(&sampler) }
             ]
         });
-        let uniform = Uniform::new(60.0,size.width as f32 / size.height as f32 );
+
+        let depth_stencil = Self::create_depth_stencil(&device,&sc_desc);
+
+        let depth_bind_group_layout =  device.create_bind_group_layout(&BindGroupLayoutDescriptor{
+            label: Some("Depth Bind Group Layout"),
+            entries: &[
+                BindGroupLayoutEntry{
+                    binding: 0,
+                    visibility: ShaderStage::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Depth,
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false
+                    },
+                    count: None
+                },
+                BindGroupLayoutEntry{
+                    binding: 1,
+                    visibility: ShaderStage::FRAGMENT,
+                    ty: BindingType::Sampler{
+                        filtering: true,
+                        comparison: true
+                    },
+                    count: None
+                }
+            ]
+        });
+
+        let depth_bind_group = device.create_bind_group(&BindGroupDescriptor{
+            label: Some("Depth Bind Group"),
+            layout: &depth_bind_group_layout,
+            entries: &[
+                BindGroupEntry{ binding: 0, resource: BindingResource::TextureView(&depth_stencil.1) },
+                BindGroupEntry{ binding: 1, resource: BindingResource::Sampler(&depth_stencil.2) }
+            ]
+        });
+
+        let uniform = Uniform::new(60.0,size.width as f32 / 2.0f32 / size.height as f32 );
+        let uniform2 = Uniform2::new(60.0,size.width as f32 / 2.0f32 / size.height as f32 );
 
         let uniform_buf = device.create_buffer_init(&BufferInitDescriptor{
             label: Some("Uniform Buffer"),
@@ -163,9 +254,16 @@ impl State{
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
         });
 
+        let uniform2_buf = device.create_buffer_init(&BufferInitDescriptor{
+            label: Some("Depth Uniform Buffer"),
+            contents: unsafe { from_raw_parts(&uniform2) },
+            usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST
+        });
+
         let instances = Instance::gen_instances(81,9,Vector3::new(0.0,0.03,0.0),1.0);
         let instance_buf:Vec<_> = instances.iter().map(|it|{
             it.to_matrix()
+
         }).collect();
 
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor{
@@ -201,9 +299,28 @@ impl State{
             ]
         });
 
+        let depth_vertex_binding_group = device.create_bind_group(&BindGroupDescriptor{
+            label: Some("Vertex binding Gropu"),
+            layout: &vertex_binding_group_layout,
+            entries: &[
+                BindGroupEntry{
+                    binding: 0,
+                    resource: uniform2_buf.as_entire_binding()
+                }
+            ]
+        });
+
         let pipeline = Self::create_pipeline(&device,&shader,&sc_desc,&[&bind_group_layout,
-            &vertex_binding_group_layout]);
-        let depth_stencil = Self::create_depth_stencil(&device,&sc_desc);
+            &vertex_binding_group_layout],&[VertexBufferLayout{
+            array_stride: size_of::<Matrix4<f32>>() as _,
+            step_mode: InputStepMode::Instance,
+            attributes: &wgpu::vertex_attr_array![ 5 => Float32x4,6 => Float32x4,7 => Float32x4,8 => Float32x4 ]
+        }],true);
+
+        let depth_pipeline = Self::create_pipeline(&device,&shader_depth,&sc_desc,&[
+            &depth_bind_group_layout,&vertex_binding_group_layout
+        ],&[],false);
+
         State{
             surface,
             device,
@@ -216,8 +333,7 @@ impl State{
             vertices,
             indices,
             img1: (texture,texture_view,sampler),
-            bind_group_layouts: vec![ bind_group_layout,vertex_binding_group_layout],
-            bind_groups: vec![bind_group,vertex_binding_group],
+            bind_groups: vec![bind_group,vertex_binding_group,depth_bind_group,depth_vertex_binding_group],
             uniform,
             uniform_buf,
             rotate: Vector3::zero(),
@@ -226,7 +342,10 @@ impl State{
             instance_buffer,
             left_btn_down :false,
             last_cursor_pos: Vector2::zero(),
-            depth_stencil
+            depth_stencil,
+            mesh_quad: (depth_vertices,depth_indices),
+            depth_pipeline,
+            depth_uniform : (uniform2,uniform2_buf),
         }
     }
 
@@ -263,9 +382,12 @@ impl State{
         (tex,tex_view,sampler)
     }
 
-    fn create_pipeline(device:& wgpu::Device,shader:&ShaderModule,
-                       sc_desc:&SwapChainDescriptor,
-                       bind_group_layouts:&'_[&'_ BindGroupLayout]) -> wgpu::RenderPipeline
+    fn create_pipeline(
+        device:& wgpu::Device,shader:&ShaderModule,
+        sc_desc:&SwapChainDescriptor,
+        bind_group_layouts:&'_[&'_ BindGroupLayout],
+        added_vertex_buffer:&[VertexBufferLayout],
+        has_depth_stencil:bool) -> wgpu::RenderPipeline
     {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor{
             label: Some("Render Pipeline Layout"),
@@ -273,23 +395,23 @@ impl State{
             push_constant_ranges: &[]
         });
 
+        let attributes = wgpu::vertex_attr_array![ 0 => Float32x3, 1=> Float32x4, 2=> Float32x2 ];
+        let mut vertex_buffers = vec![ VertexBufferLayout{
+            array_stride: size_of::<Vertex>() as _,
+            step_mode: InputStepMode::Vertex,
+            attributes: &attributes
+        }];
+        if added_vertex_buffer.len() > 0{
+            vertex_buffers.extend_from_slice(added_vertex_buffer);
+        }
+
         device.create_render_pipeline(&RenderPipelineDescriptor{
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState{
                 module: &shader,
                 entry_point: "main",
-                buffers: &[ VertexBufferLayout{
-                    array_stride: size_of::<Vertex>() as _,
-                    step_mode: InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![ 0 => Float32x3, 1=> Float32x4, 2=> Float32x2 ]
-                },
-                    VertexBufferLayout{
-                        array_stride: size_of::<Matrix4<f32>>() as _,
-                        step_mode: InputStepMode::Instance,
-                        attributes: &wgpu::vertex_attr_array![ 5 => Float32x4,6 => Float32x4,7 => Float32x4,8 => Float32x4 ]
-                    }
-                ]
+                buffers: vertex_buffers.as_slice()
             },
             fragment: Some(FragmentState{
                 module: &shader,
@@ -309,13 +431,13 @@ impl State{
                 polygon_mode: PolygonMode::Fill,
                 conservative: false
             },
-            depth_stencil: Some(DepthStencilState{
+            depth_stencil: if has_depth_stencil { Some(DepthStencilState{
                 format: TextureFormat::Depth32Float,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::Less,
                 stencil: Default::default(),
                 bias: Default::default()
-            }),
+            }) }else{None},
             multisample: MultisampleState{
                 count: 1,
                 mask: u64::MAX,
@@ -374,6 +496,8 @@ impl State{
     fn update(&mut self) {
         self.uniform.set_rotate(self.rotate);
         unsafe { self.queue.write_buffer(&self.uniform_buf, 0, from_raw_parts(&self.uniform)) }
+        //self.depth_uniform.0.set_rotate(self.rotate);
+        //unsafe { self.queue.write_buffer(&self.depth_uniform.1, 0, from_raw_parts(&self.depth_uniform.0)) }
     }
     fn render(&mut self) -> Result<(),wgpu::SwapChainError>
     {
@@ -401,6 +525,7 @@ impl State{
                     stencil_ops: None
                 })
             });
+            render_pass.set_viewport(0.0,0.0,self.sc_desc.width as f32 / 2f32,self.sc_desc.height as f32,0.0,1.0);
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0,&self.bind_groups[0],&[]);
             render_pass.set_bind_group(1,&self.bind_groups[1],&[]);
@@ -410,7 +535,32 @@ impl State{
             //render_pass.draw(0..VERTICES.len() as u32,0..1);
             render_pass.draw_indexed(0..INDICES.len() as u32,0,0..self.instance_buf.len() as _);
         }
+        {
+            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor{
+                label: Some("Render Pass depth"),
+                color_attachments: &[
+                    wgpu::RenderPassColorAttachment{
+                        view: &frame.view,
+                        resolve_target: None,
+                        ops: wgpu::Operations{
+                            load: wgpu::LoadOp::Load,
+                            store: true
+                        }
+                    }
+                ],
+                depth_stencil_attachment: None
+            });
+            render_pass.set_viewport(self.sc_desc.width as f32 / 2f32,0.0,self.sc_desc.width as f32 / 2f32,self.sc_desc.height as f32,0.0,1.0);
+            render_pass.set_pipeline(&self.depth_pipeline);
+            render_pass.set_bind_group(0,&self.bind_groups[2],&[]);
+            render_pass.set_bind_group(1,&self.bind_groups[3],&[]);
+            render_pass.set_vertex_buffer(0,self.mesh_quad.0.slice(..));
+            render_pass.set_index_buffer(self.mesh_quad.1.slice(..),IndexFormat::Uint32);
+            //render_pass.draw(0..VERTICES.len() as u32,0..1);
+            render_pass.draw_indexed(0..DEPTH_INDICES.len() as u32,0,0..1);
+        }
         self.queue.submit(std::iter::once(encoder.finish()));
+
         Ok(())
     }
 
@@ -491,10 +641,12 @@ fn main() {
                                 *control_flow = ControlFlow::Exit;
                             }
                             WindowEvent::Resized(size) => {
+                                println!("Resized {:?}",size);
                                 state.resize(size);
                             }
                             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                                 // new_inner_size is &mut so w have to dereference it twice
+                                println!("Resized {:?}",new_inner_size);
                                 state.resize(*new_inner_size);
                             }
                             _ => {}
@@ -543,6 +695,28 @@ impl Uniform{
         self.view = mat;
     }
 }
+impl Uniform2{
+    fn new(fovy:f32,aspect:f32) -> Uniform2
+    {
+        let proj = cgmath::perspective(cgmath::Deg(fovy),aspect,0.1,1000f32);
+        Uniform2{
+            projection : proj,
+            view : cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-2f32)),
+            model : cgmath::Matrix4::identity()
+        }
+    }
+
+    fn set_rotate(&mut self,r:Vector3<f32>)
+    {
+        let mat =
+            cgmath::Matrix4::from_translation(Vector3::new(0.0,0.0,-2f32)) *
+                Matrix4::from_angle_x(Rad(r.x)) *
+                Matrix4::from_angle_y(Rad(r.y)) *
+                Matrix4::from_angle_z(Rad(r.z));
+        self.view = mat;
+    }
+}
+
 
 impl Instance {
     fn to_matrix(&self) -> Matrix4<f32>
@@ -581,9 +755,9 @@ impl Instance {
 
 unsafe fn from_raw_parts<T>(t:&T) ->&[u8]
 {
-    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(t), size_of::<Uniform>())
+    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(t), size_of::<T>())
 }
 unsafe fn from_raw_parts_ex<T>(arr:&[T]) ->&[u8]
 {
-    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(&arr[0]), size_of::<Uniform>() * arr.len())
+    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(&arr[0]), size_of::<T>() * arr.len())
 }
