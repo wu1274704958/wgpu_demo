@@ -13,6 +13,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3, Zero, Rad, Quaternion, Rotation3, V
 use winit::dpi::{Pixel, PhysicalPosition};
 use std::ops::Range;
 use wgpu::LoadOp::Clear;
+use utils::{from_raw_parts,from_raw_parts_ex};
 
 #[repr(C)]
 #[derive(Debug,Copy, Clone,bytemuck::Pod, bytemuck::Zeroable)]
@@ -579,11 +580,3 @@ impl Instance {
     }
 }
 
-unsafe fn from_raw_parts<T>(t:&T) ->&[u8]
-{
-    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(t), size_of::<Uniform>())
-}
-unsafe fn from_raw_parts_ex<T>(arr:&[T]) ->&[u8]
-{
-    std::slice::from_raw_parts(std::mem::transmute::<_, *const u8>(&arr[0]), size_of::<Uniform>() * arr.len())
-}
