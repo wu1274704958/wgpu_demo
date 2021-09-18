@@ -1,3 +1,4 @@
+pub mod component;
 use std::mem::size_of;
 
 #[repr(C)]
