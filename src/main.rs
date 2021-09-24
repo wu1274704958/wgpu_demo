@@ -11,6 +11,7 @@ async fn run() {
 trait A {
     fn a(&self);
     fn as_any(&self)-> &dyn Any;
+    fn as_mut_any(&mut self)-> &mut dyn Any;
 }
 
 trait B {
@@ -34,6 +35,10 @@ impl A for Obj {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn as_mut_any(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl B for Obj {
@@ -43,14 +48,20 @@ impl B for Obj {
 }
 
 fn main() {
-    let o = Obj{};
+    let mut o = Obj{};
     o.a();
     o.b();
-    let a = as_a(Box::new(o));
-    let any = a.as_any();
-
-    let o = any.downcast_ref::<Obj>().unwrap();
-    o.say();
+    let mut a = as_a(Box::new(o));
+    {
+        let any = a.as_any();
+        let o = any.downcast_ref::<Obj>().unwrap();
+        o.say();
+    }
+    {
+        let any = a.as_mut_any();
+        let o = any.downcast_mut::<Obj>().unwrap();
+        o.say();
+    }
 
     pollster::block_on(run());
 }

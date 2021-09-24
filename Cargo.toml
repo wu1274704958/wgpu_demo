@@ -54,3 +54,7 @@ path = "src/example/depth/main.rs"
 [[example]]
 name = "depth2"
 path = "src/example/depth2/main.rs"
+
+[[example]]
+name = "test"
+path = "src/example/test/main.rs"
