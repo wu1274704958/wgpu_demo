@@ -1,13 +1,15 @@
 [package]
-name = "utils"
+name = "gen_code"
 version = "0.1.0"
 edition = "2018"
+
+
+[lib]
+proc_macro = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wgpu = { version="0.9" }
-ahash = "0.7.4"
-cgmath = "0.18.0"
-gen_code = { path="gen_code" }
-
+quote = "1.0.7"
+syn = "1.0.40"
+proc-macro2 = "1.0.20"

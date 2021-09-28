@@ -1,4 +1,6 @@
 pub mod component;
+pub mod object;
+pub mod components;
 use std::mem::size_of;
 
 #[repr(C)]
