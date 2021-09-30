@@ -1,5 +1,5 @@
 use crate::component::Component;
-use std::collections::{HashSet, HashMap};
+use std::collections::{ HashMap};
 use std::any::{Any, TypeId};
 use std::marker::PhantomPinned;
 use std::pin::Pin;
@@ -58,7 +58,7 @@ impl Object
     {
         if let Some(idx) = self.comp_type_set.remove(&Self::get_comp_hash::<T>())
         {
-            if idx >= 0 && idx < self.components.len(){
+            if idx < self.components.len(){
                 let mut c = self.components.remove(idx);
                 c.on_unreg();
                 return Some(c);
@@ -117,19 +117,61 @@ impl Object
         }
         return true;
     }
+    pub fn pin_get(self:Pin<&mut Self>) -> &mut Object
+    {
+        unsafe {self.get_unchecked_mut()}
+    }
 }
 
 
-mod TestObject{
+mod test_object{
     use crate::object::Object;
     use crate::components::Transform;
-    use std::pin::Pin;
+    use crate::component::Component;
+
     #[test]
     fn test()
     {
         let mut obj = Object::new();
-        let  mut_ref: Pin<&mut Object> = Pin::as_mut(&mut obj);
-        unsafe { mut_ref.get_unchecked_mut().add_comp(Box::new(Transform::new())); }
+        obj.as_mut().pin_get().add_comp(Box::new(Transform::new()));
+        let trans = obj.get_comp::<Transform>().unwrap();
+        let obj_ptr1 = trans.object() as *const Object;
 
+        let obj_moved = obj;
+        let trans = obj_moved.get_comp::<Transform>().unwrap();
+        let obj_ptr2 = trans.object();
+
+        let trans2 = obj_ptr2.get_comp::<Transform>().unwrap();
+
+        assert_eq!(obj_ptr1,obj_ptr2 as *const Object);
+        assert_eq!(trans2.as_ref() as *const dyn Component,trans.as_ref() as *const dyn Component);
+    }
+
+    #[test]
+    fn test2()
+    {
+        let mut obj = Object{
+            components: Vec::new(),
+            comp_type_set: Default::default(),
+            _pined: Default::default()
+        };
+        obj.add_comp(Box::new(Transform::new()));
+        let trans = obj.get_comp::<Transform>().unwrap();
+        let obj_ptr1 = trans.object() as *const Object;
+
+        let obj_moved = obj;
+        let _obj_moved_ptr = &obj_moved as *const Object;
+        let trans = obj_moved.get_comp::<Transform>().unwrap();
+        let obj_ptr2 = trans.object();
+        let arr = [0i32;50];
+        let trans2 = t2_in(arr,obj_ptr2);
+
+        assert_eq!(obj_ptr1,obj_ptr2 as *const Object);
+        assert_eq!(trans2.as_ref() as *const dyn Component,trans.as_ref() as *const dyn Component);
+    }
+
+    fn t2_in(_arr:[i32;50],obj:&Object) -> &Box<dyn Component>
+    {
+        obj.get_comp::<Transform>().unwrap()
     }
 }

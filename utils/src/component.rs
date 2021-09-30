@@ -1,19 +1,20 @@
-use wgpu::{Device, Queue, SwapChainDescriptor, VertexBufferLayout};
+use wgpu::{Device, Queue, SwapChainDescriptor};
 use std::any::{TypeId, Any};
 use crate::object::Object;
 
 pub struct InitNecessary<'a>{
-    device:&'a Device,
-    queue:&'a Queue,
-    swap_chain_desc:&'a SwapChainDescriptor
+    pub device:&'a Device,
+    pub queue:&'a Queue,
+    pub swap_chain_desc:&'a SwapChainDescriptor
 }
 pub struct RenderNecessary<'a>{
-    swap_chain_desc:&'a SwapChainDescriptor
+    pub swap_chain_desc:&'a SwapChainDescriptor
 }
 pub struct UpdateNecessary<'a>{
-    device:&'a Device,
-    queue:&'a Queue,
-    swap_chain_desc:&'a SwapChainDescriptor
+    pub delat:f32,
+    pub device:&'a Device,
+    pub queue:&'a Queue,
+    pub swap_chain_desc:&'a SwapChainDescriptor
 }
 
 pub trait Component{
@@ -34,7 +35,7 @@ pub trait Component{
     fn init(&mut self,nec:InitNecessary<'_>);
     fn render(&mut self,nec:RenderNecessary<'_>);
     fn start(&mut self);
-    fn update(&mut self,delta:f32);
+    fn update(&mut self,nec:UpdateNecessary<'_>);
     fn destroy(&mut self);
 
 }

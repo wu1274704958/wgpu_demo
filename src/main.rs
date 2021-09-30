@@ -47,6 +47,21 @@ impl B for Obj {
     }
 }
 
+trait Trait{
+    type T;
+    fn func()-> Self::T;
+}
+
+struct C;
+
+impl Trait for C{
+    type T = i64;
+
+    fn func() -> Self::T {
+        90
+    }
+}
+
 fn main() {
     let mut o = Obj{};
     o.a();
@@ -64,6 +79,8 @@ fn main() {
     }
 
     pollster::block_on(run());
+
+    dbg!(std::mem::size_of::<<C as Trait>::T>());
 }
 
 fn as_a(a:Box<dyn A>) -> Box<dyn A>

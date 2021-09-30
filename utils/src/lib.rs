@@ -1,6 +1,7 @@
 pub mod component;
 pub mod object;
 pub mod components;
+pub mod resource_manager;
 use std::mem::size_of;
 
 #[repr(C)]

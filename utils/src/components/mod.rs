@@ -1,4 +1,4 @@
-use crate::component::{Component, InitNecessary, RenderNecessary};
+use crate::component::{Component, InitNecessary, RenderNecessary, UpdateNecessary};
 use std::any::Any;
 use crate::object::Object;
 use gen_code::gen_impl_comp_common;
@@ -62,7 +62,7 @@ impl Transform {
     }
     pub fn remove(&mut self,i:usize) -> Option<Rc<Transform>>
     {
-        if i >= 0 && i < self.children.len() {
+        if i < self.children.len() {
             let mut ch = self.children.remove(i);
             Rc::get_mut(&mut ch).unwrap().parent = None;
             Some(ch)
@@ -87,7 +87,7 @@ impl Transform {
     }
     pub fn get_child(&self,i:usize) -> Option<Rc<Transform>>
     {
-        if i >= 0 && i < self.children.len() {
+        if i < self.children.len() {
             Some(self.children[i].clone())
         }else{
             None
@@ -138,11 +138,11 @@ impl Component for Transform
 
     }
 
-    fn init(&mut self, nec: InitNecessary<'_>) {
+    fn init(&mut self, _nec: InitNecessary<'_>) {
         todo!()
     }
 
-    fn render(&mut self, nec: RenderNecessary<'_>) {
+    fn render(&mut self, _nec: RenderNecessary<'_>) {
         todo!()
     }
 
@@ -150,18 +150,12 @@ impl Component for Transform
         todo!()
     }
 
-    fn update(&mut self, delta: f32) {
+    fn update(&mut self, _nec: UpdateNecessary<'_>) {
         todo!()
     }
+
 
     fn destroy(&mut self) {
         todo!()
     }
-}
-
-struct A{
-    buf:Vec<B>
-}
-struct B{
-    ptr:*const A,
 }
