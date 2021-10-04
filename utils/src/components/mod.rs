@@ -1,11 +1,13 @@
 use crate::component::{Component, InitNecessary, RenderNecessary, UpdateNecessary};
-use std::any::Any;
+use std::any::{Any,TypeId};
 use crate::object::Object;
-use gen_code::gen_impl_comp_common;
+use gen_code::{gen_impl_comp_common,gen_impl_as_any,AsAny};
 use cgmath::{Vector3, Matrix4};
 use std::rc::{Rc, Weak};
 use std::ops::{Index, IndexMut};
+use crate::AsAny;
 
+#[derive(AsAny)]
 pub struct Transform{
     object:*const Object,
     children:Vec<Rc<Transform>>,

@@ -1,6 +1,7 @@
 use wgpu::{Device, Queue, SwapChainDescriptor};
 use std::any::{TypeId, Any};
 use crate::object::Object;
+use crate::AsAny;
 
 pub struct InitNecessary<'a>{
     pub device:&'a Device,
@@ -17,10 +18,7 @@ pub struct UpdateNecessary<'a>{
     pub swap_chain_desc:&'a SwapChainDescriptor
 }
 
-pub trait Component{
-
-    fn as_any(&self) -> &dyn Any;
-    fn as_mut_any(&mut self) -> &mut dyn Any;
+pub trait Component : AsAny{
     fn type_id(&self) -> TypeId { self.as_any().type_id() }
 
     fn on_reg(&mut self,obj:*const Object);

@@ -1,9 +1,7 @@
 extern crate proc_macro;
 extern crate syn;
 
-use syn::{
-    Ident
-};
+use syn::{Ident, DeriveInput};
 use proc_macro2::Span;
 
 #[proc_macro]
@@ -14,9 +12,6 @@ pub fn gen_impl_comp_common(input: proc_macro::TokenStream) -> proc_macro::Token
 
 
     let tokens = quote::quote!{
-        fn as_any(&self) -> &dyn Any {self}
-
-        fn as_mut_any(&mut self) -> &mut dyn Any {self}
 
         fn on_reg(&mut self, obj: *const Object) {
             self.#obj_name = obj;
@@ -69,11 +64,66 @@ pub fn gen_impl_res_process_cache(input: proc_macro::TokenStream) -> proc_macro:
         fn rm_cache(&mut self, path: &String) -> Option<Rc<Self::Out>> {
             self.#obj_name.remove(path)
         }
-        fn as_any(self:Box<Self>) -> Box<dyn Any>
-        {
-            self
-        }
     };
 
     tokens.into()
+}
+
+#[proc_macro]
+pub fn gen_impl_as_any(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+
+    let tokens = quote::quote!{
+
+        fn into_any(self:Box<Self>) -> Box<dyn Any>
+            {
+                self
+            }
+            fn as_any(&self) -> &dyn Any
+            {
+                self
+            }
+            fn as_mut_any(&mut self) -> &mut dyn Any
+            {
+                self
+            }
+    };
+
+    tokens.into()
+}
+
+#[proc_macro_derive(AsAny)]
+pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse_macro_input!(input as DeriveInput);
+    let result = match ast.data {
+        syn::Data::Struct(_) |
+        syn::Data::Enum(_) => {
+            impl_as_any(&ast)
+        }
+        _ => panic!("doesn't work with unions yet"),
+    };
+    dbg!(result.to_string());
+    result.into()
+}
+
+fn impl_as_any(ast:&DeriveInput) -> proc_macro2::TokenStream
+{
+    let struct_name = &ast.ident;
+    let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+
+    quote::quote!{
+        impl #impl_generics AsAny for #struct_name #ty_generics #where_clause {
+            fn into_any(self:Box<Self>) -> Box<dyn Any>
+            {
+                self
+            }
+            fn as_any(&self) -> &dyn Any
+            {
+                self
+            }
+            fn as_mut_any(&mut self) -> &mut dyn Any
+            {
+                self
+            }
+        }
+    }
 }

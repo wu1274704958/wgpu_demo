@@ -1,12 +1,13 @@
 use std::path::Path;
 use std::rc::Rc;
 use std::collections::HashMap;
-use gen_code::gen_impl_res_process_cache;
+use gen_code::{gen_impl_res_process_cache,AsAny};
 use std::any::{TypeId, Any};
 use std::time::SystemTime;
 use std::io::Read;
+use crate::AsAny;
 
-pub trait ResProcesser
+pub trait ResProcesser : AsAny
 {
     type In;
     type Out;
@@ -28,10 +29,10 @@ pub trait ResProcesser
     fn add_cache(&mut self,path:String,data:Rc<Self::Out>);
     fn clear_cache(&mut self);
     fn rm_cache(&mut self,path:&String) -> Option<Rc<Self::Out>>;
-    fn as_any(self:Box<Self>) -> Box<dyn Any>;
 
 }
 
+#[derive(AsAny)]
 pub struct TextRes{
     cache: HashMap<String,Rc<String>>,
 }
@@ -137,9 +138,9 @@ impl ResourceMgr {
 
     pub fn add_process<T:ResProcesser<In = I,Out = O>,I,O>(&mut self,p:Box<T>)
         where O : 'static, I : 'static,T :'static,
-              T : ResProcesser<In = I,Out = O>
+              T : ResProcesser<In = I,Out = O> + AsAny
     {
-        self.process.insert(TypeId::of::<O>(),p.as_any());
+        self.process.insert(TypeId::of::<O>(),p.into_any());
     }
 
     pub fn loading<T:ResProcesser<In = I,Out = O>,I,O>(&mut self,i:Rc<I>,path:&String,cache_overdue:bool) -> Option<Rc<O>>
@@ -168,11 +169,24 @@ macro_rules! load_chain
             None
         }
     };
-    ($mgr:ident,$path:expr,$($T:tt)*) => {
-        if let Some((res,b,s)) = $mgr.load_file($path)
+    ($mgr:ident,$s:ident,$b:ident,$v:ident,$T1:ty) => {
+        if let Some(v) = $mgr.loading::<$T1,_,_>($v,&$s,$b){
+            Some(v)
+        }else{
+            None
+        }
+    };
+    ($mgr:ident,$s:ident,$b:ident,$v:ident,$T1:ty,$($T:ty),+) => {
+        if let Some(v) = $mgr.loading::<$T1,_,_>($v,&$s,$b){
+            load_chain!($mgr,$s,$b,v,$($T),+)
+        }else{
+            None
+        }
+    };
+    ($mgr:ident,$path:expr,$($T:ty),+) => {
+        if let Some((v,b,s)) = $mgr.load_file($path)
         {
-            Some(res)
-            let v = $mgr.loading::<$T,_,_>(res,&s,b).unwrap();
+            load_chain!($mgr,s,b,v,$($T),+)
         }else{
             None
         }
@@ -180,22 +194,55 @@ macro_rules! load_chain
 }
 
 mod test_load_file{
-    use crate::resource_manager::{ResourceMgr, TextRes};
+    use crate::resource_manager::{ResourceMgr, TextRes, ResProcesser};
     use std::path::Path;
     use std::process::Command;
     use std::io::Write;
     use std::fs::OpenOptions;
+    use std::any::Any;
+    use crate::AsAny;
+    use gen_code::{AsAny,gen_impl_res_process_cache};
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    #[derive(AsAny)]
+    pub struct CharArrRes{
+        cache: HashMap<String,Rc<Vec<char>>>,
+    }
+    impl CharArrRes {
+        pub fn new() ->CharArrRes
+        {
+            CharArrRes{
+                cache:Default::default()
+            }
+        }
+    }
+
+    impl ResProcesser for CharArrRes {
+        type In = String;
+        type Out = Vec<char>;
+
+        fn process(&self, d: Rc<Self::In>) -> Option<Rc<Self::Out>> {
+            Some(Rc::new(d.chars().collect()))
+        }
+
+        gen_impl_res_process_cache!{cache}
+
+
+    }
 
     #[test]
     fn test()
     {
         let mut mgr = ResourceMgr::new("".to_string());
         mgr.add_process(Box::new(TextRes::new()));
+        mgr.add_process(Box::new(CharArrRes::new()));
         let (res,b,s) = mgr.load_file("test_load.txt").unwrap();
         let v = mgr.loading::<TextRes,_,_>(res,&s,b).unwrap();
         dbg!(v);
-
         dbg!(load_chain!(mgr,"test_load.txt"));
+        dbg!(load_chain!(mgr,"test_load.txt",TextRes));
+        dbg!(load_chain!(mgr,"test_load.txt",TextRes,CharArrRes));
     }
 }
 
