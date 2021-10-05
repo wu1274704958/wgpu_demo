@@ -101,7 +101,7 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
         _ => panic!("doesn't work with unions yet"),
     };
-    dbg!(result.to_string());
+    //dbg!(result.to_string());
     result.into()
 }
 

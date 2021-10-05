@@ -156,6 +156,34 @@ impl ResourceMgr {
         proc.process_cache(path,i,cache_overdue)
     }
 
+    pub fn clear_cache_by<T:ResProcesser<In = I,Out = O>,I,O>(&mut self) -> bool
+        where O : 'static, I : 'static,T :'static,
+              T : ResProcesser<In = I,Out = O> + AsAny
+    {
+        if let Some(v) = self.process.get_mut(&TypeId::of::<O>())
+        {
+            if let Some(p) = v.downcast_mut::<T>(){
+                p.clear_cache();
+                true
+            }else { false }
+        }else{
+            false
+        }
+    }
+    pub fn rm_cache_by<T:ResProcesser<In = I,Out = O>,I,O>(&mut self,path:&String) -> Option<Rc<O>>
+        where O : 'static, I : 'static,T :'static,
+              T : ResProcesser<In = I,Out = O> + AsAny
+    {
+        if let Some(v) = self.process.get_mut(&TypeId::of::<O>())
+        {
+            if let Some(p) = v.downcast_mut::<T>(){
+                p.rm_cache(path)
+            }else { None }
+        }else{
+            None
+        }
+    }
+
 }
 
 #[macro_export]
